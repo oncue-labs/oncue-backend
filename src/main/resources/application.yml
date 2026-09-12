@@ -8,10 +8,10 @@ spring:
     driver-class-name: ${DB_DRIVER:org.h2.Driver}
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
     open-in-view: false
   flyway:
-    enabled: false
+    enabled: true
   data:
     redis:
       host: ${REDIS_HOST:localhost}

@@ -33,8 +33,22 @@ dependencies {
     testRuntimeOnly 'com.h2database:h2'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
+    testImplementation 'org.testcontainers:testcontainers-mysql'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    exclude '**/*IntegrationTest.class'
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'Runs MySQL Testcontainers integration tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    include '**/*IntegrationTest.class'
+    shouldRunAfter test
 }
