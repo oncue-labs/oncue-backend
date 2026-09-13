@@ -51,8 +51,14 @@ class DialoguePolicyBuilderTest {
                 .containsSubsequence("scenario rule", "persona rule");
         assertThat(policy.instructions()).doesNotContain(policy.scenarioContext(), policy.goal());
         assertThat(policy.dialogueRules()).doesNotContain(policy.scenarioContext(), policy.goal());
-        assertThat(policy.instructions().get(0)).containsIgnoringCase("safety");
-        assertThat(policy.dialogueRules().get(0)).containsIgnoringCase("safety");
+        assertThat(policy.instructions())
+                .anyMatch(instruction -> instruction.contains("financial transactions")
+                        && instruction.contains("passwords")
+                        && instruction.contains("OTPs"));
+        assertThat(policy.dialogueRules())
+                .anyMatch(rule -> rule.contains("financial transactions")
+                        && rule.contains("passwords")
+                        && rule.contains("OTPs"));
     }
 
     @Test

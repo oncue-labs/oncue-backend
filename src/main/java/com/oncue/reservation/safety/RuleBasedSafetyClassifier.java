@@ -18,6 +18,7 @@ public class RuleBasedSafetyClassifier {
     private static final Pattern REQUIRES_CLASSIFICATION = Pattern.compile(
             "(romance scam|romance|voice clone|clone.*voice|impersonat|real person|" +
                     "stalk|surveillance|phishing|account takeover|로맨스|음성 복제|사칭|" +
+                    "실제\\s*(사람|인물)|목소리\\s*.*복제|음성\\s*.*복제|" +
                     "스토킹|감시|피싱|계정 탈취)",
             Pattern.CASE_INSENSITIVE);
 

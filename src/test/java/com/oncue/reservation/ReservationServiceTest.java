@@ -9,6 +9,7 @@ import com.oncue.combination.repository.ScenarioRepository;
 import com.oncue.reservation.controller.request.CreateReservationRequest;
 import com.oncue.reservation.controller.request.UpdateReservationRequest;
 import com.oncue.reservation.controller.response.ReservationResponse;
+import com.oncue.reservation.model.Reservation;
 import com.oncue.reservation.model.ReservationStatus;
 import com.oncue.reservation.repository.ReservationRepository;
 import com.oncue.reservation.service.ReservationService;

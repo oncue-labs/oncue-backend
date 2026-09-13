@@ -13,18 +13,19 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ReservationController.class)
-@AutoConfigureMockMvc(addFilters = false)
+@AutoConfigureMockMvc
 class ReservationControllerTest {
 
     @Autowired
@@ -37,7 +38,6 @@ class ReservationControllerTest {
     private ReservationService reservationService;
 
     @Test
-    @WithMockUser(username = "7")
     void createsReservationForAuthenticatedUser() throws Exception {
         var request = new CreateReservationRequest(
                 "santa", "child-roleplay", "safe context", "safe goal",
@@ -48,7 +48,9 @@ class ReservationControllerTest {
                 Instant.parse("2026-09-08T11:55:00Z"), Instant.parse("2026-09-08T10:00:00Z"), null, null);
         when(reservationService.create(eq(7L), any(CreateReservationRequest.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/v1/reservations")
+                mockMvc.perform(post("/api/v1/reservations")
+                        .with(user("7"))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
