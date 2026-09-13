@@ -1,17 +1,16 @@
 package com.oncue.call;
 
+import com.oncue.common.security.RsaPrivateKeyLoader;
 import com.oncue.reservation.exception.ReservationException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import java.nio.charset.StandardCharsets;
+import java.security.PrivateKey;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.UUID;
-import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -23,7 +22,7 @@ public class ConnectionTokenService {
     private static final Duration CONNECTION_TOKEN_TTL = Duration.ofMinutes(1);
 
     private final CallSessionRepository callSessionRepository;
-    private final SecretKey signingKey;
+    private final PrivateKey signingKey;
     private final String signalingBaseUrl;
     private final List<String> iceServerUrls;
     private final String iceServerUsername;
@@ -33,25 +32,39 @@ public class ConnectionTokenService {
     @Autowired
     public ConnectionTokenService(
             CallSessionRepository callSessionRepository,
-            @Value("${oncue.auth.signing-secret}") String signingSecret,
+            @Value("${oncue.voice.jwt-private-key:}") String signingKeyMaterial,
+            @Value("${oncue.voice.jwt-private-key-file:}") String signingKeyFile,
             @Value("${oncue.voice.signaling-url:ws://localhost:8000/v1/signaling}") String signalingBaseUrl,
             @Value("${oncue.voice.ice-servers.urls:}") String iceServerUrls,
             @Value("${oncue.voice.ice-servers.username:}") String iceServerUsername,
             @Value("${oncue.voice.ice-servers.credential:}") String iceServerCredential) {
-        this(callSessionRepository, signingSecret, signalingBaseUrl, iceServerUrls,
+        this(callSessionRepository, signingKeyMaterial, signingKeyFile, signalingBaseUrl, iceServerUrls,
                 iceServerUsername, iceServerCredential, Clock.systemUTC());
     }
 
     ConnectionTokenService(
             CallSessionRepository callSessionRepository,
-            String signingSecret,
+            String signingKeyMaterial,
+            String signalingBaseUrl,
+            String iceServerUrls,
+            String iceServerUsername,
+            String iceServerCredential,
+            Clock clock) {
+        this(callSessionRepository, signingKeyMaterial, "", signalingBaseUrl, iceServerUrls,
+                iceServerUsername, iceServerCredential, clock);
+    }
+
+    ConnectionTokenService(
+            CallSessionRepository callSessionRepository,
+            String signingKeyMaterial,
+            String signingKeyFile,
             String signalingBaseUrl,
             String iceServerUrls,
             String iceServerUsername,
             String iceServerCredential,
             Clock clock) {
         this.callSessionRepository = callSessionRepository;
-        this.signingKey = Keys.hmacShaKeyFor(signingSecret.getBytes(StandardCharsets.UTF_8));
+        this.signingKey = RsaPrivateKeyLoader.load(signingKeyMaterial, signingKeyFile);
         this.signalingBaseUrl = trimTrailingSlash(signalingBaseUrl);
         this.iceServerUrls = Arrays.stream(iceServerUrls.split(","))
                 .map(String::trim)
@@ -81,7 +94,7 @@ public class ConnectionTokenService {
                 .id(UUID.randomUUID().toString())
                 .issuedAt(Date.from(createdAt))
                 .expiration(Date.from(expiresAt))
-                .signWith(signingKey)
+                .signWith(signingKey, Jwts.SIG.RS256)
                 .compact();
 
         List<ConnectionTokenResponse.IceServer> iceServers = iceServerUrls.isEmpty()

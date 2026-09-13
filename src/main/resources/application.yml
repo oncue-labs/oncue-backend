@@ -38,3 +38,6 @@ oncue:
   voice:
     base-url: ${VOICE_SERVER_URL:http://localhost:8000}
     service-token: ${VOICE_INTERNAL_SERVICE_TOKEN:}
+    # 통화 연결 토큰 전용 RSA PKCS#8 개인키. 직접 값이 파일보다 우선하며 둘 중 하나만 설정한다.
+    jwt-private-key: ${VOICE_JWT_PRIVATE_KEY:}
+    jwt-private-key-file: ${VOICE_JWT_PRIVATE_KEY_FILE:}

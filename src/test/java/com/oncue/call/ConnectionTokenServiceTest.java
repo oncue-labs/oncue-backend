@@ -11,22 +11,33 @@ import com.oncue.combination.model.Scenario;
 import com.oncue.reservation.exception.ReservationException;
 import com.oncue.reservation.model.Reservation;
 import io.jsonwebtoken.Jwts;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class ConnectionTokenServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-09-13T00:00:00Z");
-    private static final String SIGNING_SECRET = "test-signing-secret-that-is-at-least-32-bytes-long";
+    private static final KeyPair SIGNING_KEY_PAIR = generateSigningKeyPair();
+    private static final String PRIVATE_KEY_PEM = toPem(SIGNING_KEY_PAIR.getPrivate());
 
     private CallSessionRepository callSessionRepository;
     private CallSession callSession;
     private ConnectionTokenService service;
+
+    @TempDir
+    private Path temporaryDirectory;
 
     @BeforeEach
     void setUp() {
@@ -35,7 +46,7 @@ class ConnectionTokenServiceTest {
         when(callSessionRepository.findById(42L)).thenReturn(Optional.of(callSession));
         service = new ConnectionTokenService(
                 callSessionRepository,
-                SIGNING_SECRET,
+                PRIVATE_KEY_PEM,
                 "wss://voice.example.com/v1/signaling/",
                 "stun:stun.example.com, turn:turn.example.com",
                 "turn-user",
@@ -56,13 +67,13 @@ class ConnectionTokenServiceTest {
         assertThat(response.createdAt()).isEqualTo(NOW);
         assertThat(response.expiresAt()).isEqualTo(NOW.plusSeconds(60));
 
-        var claims = Jwts.parser()
-                .verifyWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(
-                        SIGNING_SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+        var parsedToken = Jwts.parser()
+                .verifyWith(SIGNING_KEY_PAIR.getPublic())
                 .clock(() -> Date.from(NOW))
                 .build()
-                .parseSignedClaims(response.connectionToken())
-                .getPayload();
+                .parseSignedClaims(response.connectionToken());
+        assertThat(parsedToken.getHeader().getAlgorithm()).isEqualTo("RS256");
+        var claims = parsedToken.getPayload();
         assertThat(claims.get("callSessionId", Long.class)).isEqualTo(42L);
         assertThat(claims.get("userId", Long.class)).isEqualTo(7L);
         assertThat(claims.get("scope", java.util.List.class)).containsExactly("voice:connect");
@@ -94,7 +105,7 @@ class ConnectionTokenServiceTest {
     void returnsNoIceServersWhenIceServerUrlsAreNotConfigured() {
         ConnectionTokenService serviceWithoutIceServers = new ConnectionTokenService(
                 callSessionRepository,
-                SIGNING_SECRET,
+                PRIVATE_KEY_PEM,
                 "wss://voice.example.com/v1/signaling",
                 "",
                 "",
@@ -102,6 +113,47 @@ class ConnectionTokenServiceTest {
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         assertThat(serviceWithoutIceServers.issue(7L, 42L).iceServers()).isEmpty();
+    }
+
+    @Test
+    void loadsSigningKeyFromConfiguredFileWhenInlineKeyIsAbsent() throws Exception {
+        Path keyFile = temporaryDirectory.resolve("voice-jwt-private-key.pem");
+        Files.writeString(keyFile, PRIVATE_KEY_PEM);
+        ConnectionTokenService serviceFromFile = new ConnectionTokenService(
+                callSessionRepository,
+                "",
+                keyFile.toString(),
+                "wss://voice.example.com/v1/signaling",
+                "",
+                "",
+                "",
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        String token = serviceFromFile.issue(7L, 42L).connectionToken();
+
+        assertThat(Jwts.parser()
+                .verifyWith(SIGNING_KEY_PAIR.getPublic())
+                .clock(() -> Date.from(NOW))
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getId()).isNotBlank();
+    }
+
+    private static KeyPair generateSigningKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not create test RSA key pair", exception);
+        }
+    }
+
+    private static String toPem(PrivateKey privateKey) {
+        String encoded = Base64.getMimeEncoder(64, "\n".getBytes())
+                .encodeToString(privateKey.getEncoded());
+        return "-----BEGIN PRIVATE KEY-----\n" + encoded + "\n-----END PRIVATE KEY-----";
     }
 
     private static CallSession callSession(Long callSessionId, Long userId, String voiceSessionId) {

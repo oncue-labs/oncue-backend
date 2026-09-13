@@ -4,3 +4,7 @@ spring:
       ddl-auto: none
   flyway:
     enabled: false
+
+oncue:
+  voice:
+    jwt-private-key-file: src/test/resources/test-connection-private-key.pem
