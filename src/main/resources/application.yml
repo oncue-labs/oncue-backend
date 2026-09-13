@@ -25,3 +25,6 @@ oncue:
   auth:
     signing-secret: ${JWT_SIGNING_SECRET}
     access-token-ttl: ${ACCESS_TOKEN_TTL:PT1H}
+  voice:
+    base-url: ${VOICE_SERVER_URL:http://localhost:8000}
+    service-token: ${VOICE_INTERNAL_SERVICE_TOKEN:}
