@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -70,6 +71,19 @@ public class CallSessionService {
                         : result.endedAt();
                 callSession.complete(result.callOutcome(), callStartedAt, callEndedAt);
             }
+            callSessionRepository.save(callSession);
+        });
+    }
+
+    @Transactional
+    public void reconcileExpiredCallSessions(Instant now) {
+        Instant scheduledBefore = now.minus(7, ChronoUnit.MINUTES);
+        List<CallSession> unfinishedSessions = callSessionRepository.findUnfinishedBefore(scheduledBefore);
+        unfinishedSessions.forEach(callSession -> {
+            CallOutcome outcome = callSession.getCallStatus() == CallStatus.IN_CALL
+                    ? CallOutcome.SUCCEEDED
+                    : CallOutcome.FAILED;
+            callSession.complete(outcome, callSession.getStartedAt(), now);
             callSessionRepository.save(callSession);
         });
     }
