@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ConnectionTokenService {
@@ -75,6 +76,7 @@ public class ConnectionTokenService {
         this.clock = clock;
     }
 
+    @Transactional(readOnly = true)
     public ConnectionTokenResponse issue(Long userId, Long callSessionId) {
         CallSession callSession = callSessionRepository.findById(callSessionId)
                 .orElseThrow(() -> new ReservationException(HttpStatus.NOT_FOUND, "Call session not found"));
