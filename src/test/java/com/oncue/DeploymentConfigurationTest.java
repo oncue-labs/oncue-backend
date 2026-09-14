@@ -33,4 +33,24 @@ class DeploymentConfigurationTest {
                 () -> assertTrue(applicationConfiguration.contains("management:")),
                 () -> assertTrue(applicationConfiguration.contains("include: health")));
     }
+
+    @Test
+    void dockerfileRunsAsNonRootAndDeclaresHealthcheck() throws IOException {
+        String dockerfile = Files.readString(Path.of("Dockerfile"));
+
+        assertAll(
+                () -> assertTrue(dockerfile.contains("USER oncue")),
+                () -> assertTrue(dockerfile.contains("HEALTHCHECK")),
+                () -> assertTrue(dockerfile.contains("/actuator/health")));
+    }
+
+    @Test
+    void actuatorHealthDoesNotExposeDependencyDetails() throws IOException {
+        String applicationConfiguration = Files.readString(Path.of("src/main/resources/application.yml"));
+
+        assertAll(
+                () -> assertTrue(applicationConfiguration.contains("show-details: never")),
+                () -> assertTrue(applicationConfiguration.contains("db:")),
+                () -> assertTrue(applicationConfiguration.contains("redis:")));
+    }
 }
