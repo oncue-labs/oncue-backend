@@ -35,7 +35,7 @@ dependencies {
     testRuntimeOnly 'com.h2database:h2'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
-    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
+    testImplementation enforcedPlatform('org.testcontainers:testcontainers-bom:2.0.5')
     testImplementation 'org.testcontainers:testcontainers-mysql'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 }
@@ -43,6 +43,22 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
     exclude '**/*IntegrationTest.class'
+}
+
+// Spring Boot 3.2의 의존성 관리가 Testcontainers와 commons-lang3를 낮추지 않도록
+// Docker Desktop 통합 테스트에 필요한 버전을 테스트 클래스패스에서 고정한다.
+configurations.matching { configuration ->
+    configuration.name in ['testCompileClasspath', 'testRuntimeClasspath']
+}.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.testcontainers') {
+            details.useVersion('2.0.5')
+        }
+        if (details.requested.group == 'org.apache.commons'
+                && details.requested.name == 'commons-lang3') {
+            details.useVersion('3.18.0')
+        }
+    }
 }
 
 tasks.register('integrationTest', Test) {
