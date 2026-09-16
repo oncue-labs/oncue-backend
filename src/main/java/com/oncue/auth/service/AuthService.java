@@ -46,10 +46,9 @@ public class AuthService {
         if (identityProviderClient == null) {
             throw new IllegalArgumentException("Unsupported identity provider: " + request.provider());
         }
+        validateProviderCredentials(request);
 
-        ExternalIdentity externalIdentity = identityProviderClient.resolve(
-                request.authorizationCode(),
-                request.codeVerifier());
+        ExternalIdentity externalIdentity = identityProviderClient.resolve(request);
         UserLoginAccount existingAccount = userLoginAccountRepository
                 .findByProviderAndProviderUserId(request.provider(), externalIdentity.providerUserId())
                 .orElse(null);
@@ -67,5 +66,19 @@ public class AuthService {
 
         AccessToken accessToken = accessTokenService.issue(user);
         return new LoginResponse(accessToken.value(), accessToken.expiresAt(), Instant.now());
+    }
+
+    private static void validateProviderCredentials(LoginRequest request) {
+        if ("kakao".equals(request.provider()) && isBlank(request.providerAccessToken())) {
+            throw new IllegalArgumentException("Kakao provider access token is required");
+        }
+        if ("x".equals(request.provider())
+                && (isBlank(request.authorizationCode()) || isBlank(request.codeVerifier()))) {
+            throw new IllegalArgumentException("X authorization code and code verifier are required");
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.oncue.auth.controller.request.LoginRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -37,7 +38,8 @@ class XIdentityProviderClientTest {
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("{\"data\":{\"id\":\"x-user-1\"}}", MediaType.APPLICATION_JSON));
 
-        ExternalIdentity identity = client.resolve("authorization-code", "code-verifier");
+        ExternalIdentity identity = client.resolve(
+                new LoginRequest("x", null, "authorization-code", "code-verifier"));
 
         assertThat(identity.providerUserId()).isEqualTo("x-user-1");
         server.verify();

@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record LoginRequest(
         @NotBlank String provider,
-        @NotBlank String authorizationCode,
-        @NotBlank String codeVerifier) {
+        String providerAccessToken,
+        String authorizationCode,
+        String codeVerifier) {
 }

@@ -1,5 +1,6 @@
 package com.oncue.auth.identity_provider;
 
+import com.oncue.auth.controller.request.LoginRequest;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,12 +56,12 @@ public class XIdentityProviderClient implements IdentityProviderClient {
     }
 
     @Override
-    public ExternalIdentity resolve(String authorizationCode, String codeVerifier) {
+    public ExternalIdentity resolve(LoginRequest request) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "authorization_code");
         form.add("client_id", clientId);
-        form.add("code", authorizationCode);
-        form.add("code_verifier", codeVerifier);
+        form.add("code", request.authorizationCode());
+        form.add("code_verifier", request.codeVerifier());
         addIfPresent(form, "client_secret", clientSecret);
         addIfPresent(form, "redirect_uri", redirectUri);
 

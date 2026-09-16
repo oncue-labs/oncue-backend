@@ -43,7 +43,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new LoginRequest("kakao", "authorization-code", "code-verifier"))))
+                                new LoginRequest("kakao", "provider-access-token", null, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").value("access-token"))
                 .andExpect(jsonPath("$.expiresAt").value("2026-09-12T14:00:00Z"))

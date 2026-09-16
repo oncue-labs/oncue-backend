@@ -42,12 +42,12 @@ class AuthServiceTest {
 
     @Test
     void loginWithKakaoCreatesUserAndReturnsContractFields() {
-        var request = new LoginRequest("kakao", "kakao-authorization-code", "kakao-code-verifier");
+        var request = new LoginRequest("kakao", "kakao-provider-access-token", null, null);
         var user = new User(42L);
         var expiresAt = Instant.parse("2026-09-12T14:00:00Z");
 
         when(identityProviderClient.provider()).thenReturn("kakao");
-        when(identityProviderClient.resolve("kakao-authorization-code", "kakao-code-verifier"))
+        when(identityProviderClient.resolve(request))
                 .thenReturn(new ExternalIdentity("kakao-user-1"));
         when(userLoginAccountRepository.findByProviderAndProviderUserId("kakao", "kakao-user-1"))
                 .thenReturn(Optional.empty());
@@ -65,13 +65,13 @@ class AuthServiceTest {
 
     @Test
     void loginWithExistingAccountReusesLinkedUser() {
-        var request = new LoginRequest("x", "x-authorization-code", "x-code-verifier");
+        var request = new LoginRequest("x", null, "x-authorization-code", "x-code-verifier");
         var user = new User(7L);
         var account = new UserLoginAccount(user, "x", "x-user-1");
         var expiresAt = Instant.parse("2026-09-12T14:00:00Z");
 
         when(identityProviderClient.provider()).thenReturn("x");
-        when(identityProviderClient.resolve("x-authorization-code", "x-code-verifier"))
+        when(identityProviderClient.resolve(request))
                 .thenReturn(new ExternalIdentity("x-user-1"));
         when(userLoginAccountRepository.findByProviderAndProviderUserId("x", "x-user-1"))
                 .thenReturn(Optional.of(account));
@@ -90,7 +90,7 @@ class AuthServiceTest {
         var authService = newAuthService();
 
         assertThatThrownBy(() -> authService.login(
-                new LoginRequest("apple", "authorization-code", "code-verifier")))
+                new LoginRequest("apple", null, "authorization-code", "code-verifier")))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
