@@ -3,10 +3,12 @@ package com.oncue.call;
 import com.oncue.conversation.model.DialoguePolicy;
 import com.oncue.conversation.service.DialoguePolicyService;
 import com.oncue.reservation.model.Reservation;
+import com.oncue.reservation.exception.ReservationException;
 import com.oncue.reservation.repository.ReservationRepository;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -89,24 +91,36 @@ public class CallSessionService {
     }
 
     @Transactional
-    public void reject(Long userId, Long callSessionId) {
+    public CallSessionResponse reject(Long userId, Long callSessionId) {
         CallSession callSession = callSessionRepository.findById(callSessionId)
-                .orElseThrow(() -> new IllegalArgumentException("Call session not found"));
+                .orElseThrow(() -> new ReservationException(HttpStatus.NOT_FOUND, "Call session not found"));
         if (!userId.equals(callSession.getReservation().getUser().getId())) {
-            throw new IllegalArgumentException("Call session does not belong to user");
+            throw new ReservationException(HttpStatus.FORBIDDEN, "Call session does not belong to user");
         }
         if (callSession.isEnded()) {
-            return;
+            return toResponse(callSession);
+        }
+        if (callSession.getCallStatus() != CallStatus.RINGING) {
+            throw new ReservationException(HttpStatus.CONFLICT, "Call session is not ringing");
         }
 
-        Instant now = clock.instant();
-        Instant callStartedAt = callSession.getStartedAt() == null ? now : callSession.getStartedAt();
-        callSession.advanceTo(CallStatus.RINGING);
-        callSession.complete(CallOutcome.FAILED, callStartedAt, now);
-        callSessionRepository.save(callSession);
         if (callSession.getVoiceSessionId() != null) {
             requireVoiceServerClient().terminateSession(callSession.getVoiceSessionId());
         }
+        Instant now = clock.instant();
+        Instant callStartedAt = callSession.getStartedAt() == null ? now : callSession.getStartedAt();
+        callSession.complete(CallOutcome.FAILED, callStartedAt, now);
+        CallSession savedCallSession = callSessionRepository.save(callSession);
+        return toResponse(savedCallSession);
+    }
+
+    private CallSessionResponse toResponse(CallSession callSession) {
+        return new CallSessionResponse(
+                callSession.getId(),
+                callSession.getCallStatus(),
+                callSession.getCallOutcome(),
+                callSession.getCreatedAt(),
+                callSession.getEndedAt());
     }
 
     private CallSession createCallSession(Reservation reservation) {

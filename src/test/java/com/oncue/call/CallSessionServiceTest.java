@@ -6,6 +6,7 @@ import com.oncue.combination.model.Scenario;
 import com.oncue.conversation.model.DialoguePolicy;
 import com.oncue.conversation.service.DialoguePolicyService;
 import com.oncue.reservation.model.Reservation;
+import com.oncue.reservation.exception.ReservationException;
 import com.oncue.reservation.repository.ReservationRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -111,16 +112,23 @@ class CallSessionServiceTest {
     void rejectsRingingSessionAndRequestsVoiceTermination() {
         CallSession session = new CallSession(100L, reservation());
         session.markVoiceSession("voice-100");
+        session.advanceTo(CallStatus.RINGING);
         when(callSessionRepository.findById(100L)).thenReturn(Optional.of(session));
         when(callSessionRepository.save(any(CallSession.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         CallSessionService service = service();
-        service.reject(7L, 100L);
+        CallSessionResponse response = service.reject(7L, 100L);
 
         assertThat(session.getCallStatus()).isEqualTo(CallStatus.RINGING);
         assertThat(session.getCallOutcome()).isEqualTo(CallOutcome.FAILED);
+        assertThat(response.callSessionId()).isEqualTo(100L);
+        assertThat(response.callOutcome()).isEqualTo(CallOutcome.FAILED);
         verify(voiceServerClient).terminateSession("voice-100");
+
+        InOrder inOrder = inOrder(voiceServerClient, callSessionRepository);
+        inOrder.verify(voiceServerClient).terminateSession("voice-100");
+        inOrder.verify(callSessionRepository).save(session);
     }
 
     @Test
@@ -130,9 +138,39 @@ class CallSessionServiceTest {
         when(callSessionRepository.findById(100L)).thenReturn(Optional.of(session));
 
         assertThatThrownBy(() -> service().reject(8L, 100L))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ReservationException.class)
                 .hasMessage("Call session does not belong to user");
 
+        verify(callSessionRepository, never()).save(any(CallSession.class));
+        verify(voiceServerClient, never()).terminateSession(any());
+    }
+
+    @Test
+    void rejectsOnlyRingingCallSessions() {
+        CallSession session = new CallSession(100L, reservation());
+        session.advanceTo(CallStatus.CONNECTING);
+        when(callSessionRepository.findById(100L)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> service().reject(7L, 100L))
+                .isInstanceOf(ReservationException.class)
+                .hasMessage("Call session is not ringing");
+
+        verify(callSessionRepository, never()).save(any(CallSession.class));
+        verify(voiceServerClient, never()).terminateSession(any());
+    }
+
+    @Test
+    void returnsEndedCallSessionWithoutTerminatingOrSavingAgain() {
+        CallSession session = new CallSession(100L, reservation());
+        session.markVoiceSession("voice-100");
+        session.advanceTo(CallStatus.IN_CALL);
+        session.complete(CallOutcome.SUCCEEDED, NOW, NOW.plusSeconds(10));
+        when(callSessionRepository.findById(100L)).thenReturn(Optional.of(session));
+
+        CallSessionResponse response = service().reject(7L, 100L);
+
+        assertThat(response.callSessionId()).isEqualTo(100L);
+        assertThat(response.callOutcome()).isEqualTo(CallOutcome.SUCCEEDED);
         verify(callSessionRepository, never()).save(any(CallSession.class));
         verify(voiceServerClient, never()).terminateSession(any());
     }

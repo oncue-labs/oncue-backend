@@ -108,6 +108,9 @@ public class ReservationService {
         String timeZone = valueOrDefault(request.timeZone(), reservation.getTimeZone());
         Persona persona = findPersona(personaKey);
         Scenario scenario = findScenario(scenarioKey);
+        if (request.scheduledAtLocal() == null) {
+            validateTimeZone(timeZone);
+        }
         Instant scheduledAtUtc = request.scheduledAtLocal() == null
                 ? reservation.getScheduledAtUtc()
                 : toUtc(request.scheduledAtLocal(), timeZone);
@@ -197,6 +200,15 @@ public class ReservationService {
     private Instant toUtc(LocalDateTime scheduledAtLocal, String timeZone) {
         try {
             return scheduledAtLocal.atZone(ZoneId.of(timeZone)).toInstant();
+        } catch (DateTimeException exception) {
+            throw new ReservationException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid time zone");
+        }
+    }
+
+    private void validateTimeZone(String timeZone) {
+        try {
+            ZoneId.of(timeZone);
         } catch (DateTimeException exception) {
             throw new ReservationException(
                     org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid time zone");

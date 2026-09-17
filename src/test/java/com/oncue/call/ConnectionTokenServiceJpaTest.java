@@ -1,5 +1,6 @@
 package com.oncue.call;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.oncue.auth.model.User;
@@ -72,6 +73,24 @@ class ConnectionTokenServiceJpaTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void activeKeyQueriesReturnOnlyActivePersonasAndScenarios() {
+        Persona activePersona = persona("active-persona", Persona.ACTIVE_STATUS);
+        Persona inactivePersona = persona("inactive-persona", "INACTIVE");
+        Scenario activeScenario = scenario("active-scenario", Scenario.ACTIVE_STATUS);
+        Scenario inactiveScenario = scenario("inactive-scenario", "INACTIVE");
+
+        personaRepository.saveAndFlush(activePersona);
+        personaRepository.saveAndFlush(inactivePersona);
+        scenarioRepository.saveAndFlush(activeScenario);
+        scenarioRepository.saveAndFlush(inactiveScenario);
+
+        assertThat(personaRepository.findActiveByKey("active-persona")).contains(activePersona);
+        assertThat(personaRepository.findActiveByKey("inactive-persona")).isEmpty();
+        assertThat(scenarioRepository.findActiveByKey("active-scenario")).contains(activeScenario);
+        assertThat(scenarioRepository.findActiveByKey("inactive-scenario")).isEmpty();
+    }
+
     private PersistedCallSession saveCallSession() {
         return new TransactionTemplate(transactionManager).execute(status -> {
             User user = userRepository.saveAndFlush(User.active());
@@ -110,6 +129,34 @@ class ConnectionTokenServiceJpaTest {
             callSession = callSessionRepository.saveAndFlush(callSession);
             return new PersistedCallSession(user.getId(), callSession.getId());
         });
+    }
+
+    private Persona persona(String key, String status) {
+        return new Persona(
+                null,
+                key,
+                "Test persona",
+                "Test persona description",
+                "Test context",
+                "Test instructions",
+                List.of(),
+                "test-voice",
+                null,
+                null,
+                status);
+    }
+
+    private Scenario scenario(String key, String status) {
+        return new Scenario(
+                null,
+                key,
+                "Test scenario",
+                "Test scenario description",
+                "Test context",
+                "Test goal",
+                "Test instructions",
+                List.of(),
+                status);
     }
 
     private record PersistedCallSession(Long userId, Long callSessionId) {

@@ -9,6 +9,7 @@ import com.oncue.combination.repository.ScenarioRepository;
 import com.oncue.reservation.controller.request.CreateReservationRequest;
 import com.oncue.reservation.controller.request.UpdateReservationRequest;
 import com.oncue.reservation.controller.response.ReservationResponse;
+import com.oncue.reservation.exception.ReservationException;
 import com.oncue.reservation.model.Reservation;
 import com.oncue.reservation.model.ReservationStatus;
 import com.oncue.reservation.repository.ReservationRepository;
@@ -97,6 +98,41 @@ class ReservationServiceTest {
     }
 
     @Test
+    void rejectsInactivePersonaKeyBeforeSavingReservation() {
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(new User(USER_ID)));
+        when(personaRepository.findActiveByKey("inactive-persona")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reservationService.create(
+                USER_ID,
+                new CreateReservationRequest(
+                        "inactive-persona",
+                        "go-home",
+                        "safe context",
+                        "safe goal",
+                        LocalDateTime.of(2026, 9, 8, 21, 0),
+                        "Asia/Seoul")))
+                .hasMessage("Active persona not found");
+    }
+
+    @Test
+    void rejectsInactiveScenarioKeyBeforeSavingReservation() {
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(new User(USER_ID)));
+        when(personaRepository.findActiveByKey("santa")).thenReturn(Optional.of(persona()));
+        when(scenarioRepository.findActiveByKey("inactive-scenario")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reservationService.create(
+                USER_ID,
+                new CreateReservationRequest(
+                        "santa",
+                        "inactive-scenario",
+                        "safe context",
+                        "safe goal",
+                        LocalDateTime.of(2026, 9, 8, 21, 0),
+                        "Asia/Seoul")))
+                .hasMessage("Active scenario not found");
+    }
+
+    @Test
     void rejectsOverlappingReservationWithoutValidatingPersonaScenarioPair() {
         Persona firstPersona = persona();
         Scenario firstScenario = scenario();
@@ -164,6 +200,21 @@ class ReservationServiceTest {
     }
 
     @Test
+    void rejectsInvalidTimeZoneWhenOnlyTimeZoneIsUpdated() {
+        Reservation existing = scheduledReservation(Instant.parse("2026-09-08T12:00:00Z"));
+        when(reservationRepository.findByIdAndUser_Id(100L, USER_ID)).thenReturn(Optional.of(existing));
+        when(personaRepository.findActiveByKey("santa")).thenReturn(Optional.of(persona()));
+        when(scenarioRepository.findActiveByKey("go-home")).thenReturn(Optional.of(scenario()));
+
+        assertThatThrownBy(() -> reservationService.update(
+                USER_ID,
+                100L,
+                new UpdateReservationRequest(null, null, null, null, null, "Invalid/TimeZone")))
+                .isInstanceOf(ReservationException.class)
+                .hasMessage("Invalid time zone");
+    }
+
+    @Test
     void rejectsCancelAfterFiveMinuteLockWindow() {
         Reservation existing = scheduledReservation(Instant.parse("2026-09-08T10:04:00Z"));
         when(reservationRepository.findByIdAndUser_Id(100L, USER_ID)).thenReturn(Optional.of(existing));
@@ -173,11 +224,39 @@ class ReservationServiceTest {
     }
 
     @Test
+    void rejectsUpdateAtExactlyFiveMinuteLockWindow() {
+        Reservation existing = scheduledReservation(Instant.parse("2026-09-08T10:05:00Z"));
+        when(reservationRepository.findByIdAndUser_Id(100L, USER_ID)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> reservationService.update(
+                USER_ID,
+                100L,
+                new UpdateReservationRequest(null, null, null, null, null, null)))
+                .hasMessage("Reservation is within the five-minute lock window");
+    }
+
+    @Test
     void isolatesReservationLookupByOwner() {
         when(reservationRepository.findByIdAndUser_Id(100L, USER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> reservationService.get(USER_ID, 100L))
                 .hasMessage("Reservation not found");
+    }
+
+    @Test
+    void listsOnlyReservationsReturnedForTheAuthenticatedUserInScheduledOrder() {
+        Reservation first = scheduledReservation(Instant.parse("2026-09-08T12:00:00Z"));
+        Reservation second = scheduledReservation(Instant.parse("2026-09-08T13:00:00Z"));
+        when(reservationRepository.findByUser_IdOrderByScheduledAtUtcAsc(USER_ID))
+                .thenReturn(List.of(first, second));
+
+        List<ReservationResponse> responses = reservationService.list(USER_ID);
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses).extracting(ReservationResponse::scheduledAtUtc)
+                .containsExactly(
+                        Instant.parse("2026-09-08T12:00:00Z"),
+                        Instant.parse("2026-09-08T13:00:00Z"));
     }
 
     @Test
