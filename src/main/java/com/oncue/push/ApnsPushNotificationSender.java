@@ -87,7 +87,7 @@ public class ApnsPushNotificationSender implements PushNotificationSender {
                 .uri(URI.create(endpoint(device.getEnvironment()) + "/3/device/" + device.getDeviceToken()))
                 .timeout(Duration.ofSeconds(10))
                 .header("authorization", "bearer " + createProviderToken())
-                .header("apns-topic", bundleId)
+                .header("apns-topic", bundleId + ".voip")
                 .header("apns-push-type", "voip")
                 .header("apns-priority", "10")
                 .header("content-type", "application/json")
@@ -97,7 +97,9 @@ public class ApnsPushNotificationSender implements PushNotificationSender {
             HttpResponse<String> response = httpClient.send(
                     request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("APNs rejected the push with status " + response.statusCode());
+                throw new IllegalStateException(
+                        "APNs rejected the push with status " + response.statusCode()
+                                + " and response " + response.body());
             }
         } catch (IOException exception) {
             throw new IllegalStateException("APNs push request failed", exception);
