@@ -248,6 +248,34 @@ class CallSessionServiceTest {
     }
 
     @Test
+    void reusesEndedCallSessionForAnotherImmediateTestCall() {
+        Reservation reservation = reservation();
+        DialoguePolicy policy = policy();
+        CallSession existing = new CallSession(321L, reservation);
+        existing.markVoiceSession("voice-old");
+        existing.advanceTo(CallStatus.IN_CALL);
+        existing.complete(CallOutcome.FAILED, NOW, NOW.plusSeconds(10));
+        when(reservationRepository.findByIdAndUser_Id(100L, 7L)).thenReturn(Optional.of(reservation));
+        when(callSessionRepository.findByReservationId(100L)).thenReturn(Optional.of(existing));
+        when(callSessionRepository.save(any(CallSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dialoguePolicyService.build(
+                reservation.getPersona(), reservation.getScenario(),
+                reservation.getScenarioContext(), reservation.getCallGoal(),
+                java.util.Locale.KOREAN)).thenReturn(policy);
+        when(voiceServerClient.createSession(any(CreateVoiceSessionRequest.class)))
+                .thenReturn(new VoiceSessionResponse(321L, "voice-new", NOW));
+
+        CallSessionResponse result = service().prepareForTest(7L, 100L);
+
+        assertThat(result.callSessionId()).isEqualTo(321L);
+        assertThat(result.callStatus()).isEqualTo(CallStatus.PREPARING);
+        assertThat(result.callOutcome()).isNull();
+        assertThat(existing.getEndedAt()).isNull();
+        assertThat(existing.getVoiceSessionId()).isEqualTo("voice-new");
+        verify(voiceServerClient).createSession(any(CreateVoiceSessionRequest.class));
+    }
+
+    @Test
     void ringsDueCallAndMarksItFailedWhenPushDeliveryFails() {
         CallSession session = new CallSession(100L, reservation());
         session.markVoiceSession("voice-100");

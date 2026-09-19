@@ -81,11 +81,13 @@ public class CallSessionService {
                 .orElseThrow(() -> new ReservationException(HttpStatus.NOT_FOUND, "Reservation not found"));
         java.util.Optional<CallSession> existing = callSessionRepository.findByReservationId(reservationId);
         if (existing.isPresent()) {
-            if (existing.get().isEnded()) {
-                throw new ReservationException(
-                        HttpStatus.CONFLICT, "Test call session has already ended for this reservation");
+            CallSession callSession = existing.get();
+            if (callSession.isEnded()) {
+                callSession.resetForTest();
+                return toResponse(attachVoiceSession(
+                        callSession, reservation, clock.instant().plus(7, ChronoUnit.MINUTES)));
             }
-            return toResponse(existing.get());
+            return toResponse(callSession);
         }
 
         return toResponse(createCallSession(
@@ -178,14 +180,20 @@ public class CallSessionService {
     }
 
     private CallSession createCallSession(Reservation reservation, Instant expiresAt) {
+        CallSession callSession = callSessionRepository.save(new CallSession(reservation));
+        return attachVoiceSession(callSession, reservation, expiresAt);
+    }
+
+    private CallSession attachVoiceSession(
+            CallSession callSession,
+            Reservation reservation,
+            Instant expiresAt) {
         DialoguePolicy dialoguePolicy = dialoguePolicyService.build(
                 reservation.getPersona(),
                 reservation.getScenario(),
                 reservation.getScenarioContext(),
                 reservation.getCallGoal(),
                 Locale.KOREAN);
-
-        CallSession callSession = callSessionRepository.save(new CallSession(reservation));
         VoiceSessionResponse voiceSession = requireVoiceServerClient().createSession(
                 new CreateVoiceSessionRequest(
                         callSession.getId(),

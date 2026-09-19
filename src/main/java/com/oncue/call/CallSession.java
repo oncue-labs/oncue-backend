@@ -93,6 +93,17 @@ public class CallSession {
         this.endedAt = callEndedAt;
     }
 
+    public void resetForTest() {
+        if (!isEnded()) {
+            return;
+        }
+        this.voiceSessionId = null;
+        this.callStatus = CallStatus.PREPARING;
+        this.callOutcome = null;
+        this.startedAt = null;
+        this.endedAt = null;
+    }
+
     public boolean isEnded() {
         return endedAt != null;
     }
