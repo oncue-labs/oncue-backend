@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /** HTTP adapter for the internal oncue-voice session API. */
@@ -43,11 +44,16 @@ public class RestVoiceServerClient implements VoiceServerClient {
 
     @Override
     public void terminateSession(String voiceSessionId) {
-        restClient.post()
-                .uri(baseUrl + "/internal/v1/voice-sessions/{voiceSessionId}/terminate", voiceSessionId)
-                .headers(headers -> headers.setBearerAuth(serviceToken))
-                .retrieve()
-                .toBodilessEntity();
+        try {
+            restClient.post()
+                    .uri(baseUrl + "/internal/v1/voice-sessions/{voiceSessionId}/terminate", voiceSessionId)
+                    .headers(headers -> headers.setBearerAuth(serviceToken))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException.NotFound ignored) {
+            // The technical voice session may have already expired or been removed.
+            // Termination is idempotent cleanup, so the caller can create a new session.
+        }
     }
 
     private static String trimTrailingSlash(String value) {

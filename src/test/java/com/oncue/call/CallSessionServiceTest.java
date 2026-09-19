@@ -272,7 +272,9 @@ class CallSessionServiceTest {
         assertThat(result.callOutcome()).isNull();
         assertThat(existing.getEndedAt()).isNull();
         assertThat(existing.getVoiceSessionId()).isEqualTo("voice-new");
-        verify(voiceServerClient).createSession(any(CreateVoiceSessionRequest.class));
+        InOrder inOrder = inOrder(voiceServerClient);
+        inOrder.verify(voiceServerClient).terminateSession("voice-old");
+        inOrder.verify(voiceServerClient).createSession(any(CreateVoiceSessionRequest.class));
     }
 
     @Test

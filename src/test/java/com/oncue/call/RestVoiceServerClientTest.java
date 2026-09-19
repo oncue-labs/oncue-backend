@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.oncue.conversation.model.DialoguePolicy;
@@ -15,6 +16,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -90,6 +92,22 @@ class RestVoiceServerClientTest {
                 .andRespond(withNoContent());
 
         client.terminateSession("voice-session-321");
+
+        server.verify();
+    }
+
+    @Test
+    void ignoresNotFoundWhenTerminatingAlreadyExpiredVoiceSession() {
+        RestClient.Builder builder = builderWithIsoInstantSerialization();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        RestVoiceServerClient client = new RestVoiceServerClient(
+                builder.build(), "https://voice.test", "service-token");
+
+        server.expect(requestTo("https://voice.test/internal/v1/voice-sessions/expired-session/terminate"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        client.terminateSession("expired-session");
 
         server.verify();
     }

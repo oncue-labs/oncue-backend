@@ -83,6 +83,9 @@ public class CallSessionService {
         if (existing.isPresent()) {
             CallSession callSession = existing.get();
             if (callSession.isEnded()) {
+                if (callSession.getVoiceSessionId() != null) {
+                    requireVoiceServerClient().terminateSession(callSession.getVoiceSessionId());
+                }
                 callSession.resetForTest();
                 return toResponse(attachVoiceSession(
                         callSession, reservation, clock.instant().plus(7, ChronoUnit.MINUTES)));
