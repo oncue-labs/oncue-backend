@@ -71,7 +71,25 @@ public class CallSessionService {
         Reservation reservation = reservationRepository.findById(reservationId)
                 .orElseThrow(() -> new IllegalArgumentException("Reservation not found"));
         return callSessionRepository.findByReservationId(reservationId)
-                .orElseGet(() -> createCallSession(reservation));
+                .orElseGet(() -> createCallSession(
+                        reservation, reservation.getScheduledAtUtc().plus(7, ChronoUnit.MINUTES)));
+    }
+
+    @Transactional
+    public CallSessionResponse prepareForTest(Long userId, Long reservationId) {
+        Reservation reservation = reservationRepository.findByIdAndUser_Id(reservationId, userId)
+                .orElseThrow(() -> new ReservationException(HttpStatus.NOT_FOUND, "Reservation not found"));
+        java.util.Optional<CallSession> existing = callSessionRepository.findByReservationId(reservationId);
+        if (existing.isPresent()) {
+            if (existing.get().isEnded()) {
+                throw new ReservationException(
+                        HttpStatus.CONFLICT, "Test call session has already ended for this reservation");
+            }
+            return toResponse(existing.get());
+        }
+
+        return toResponse(createCallSession(
+                reservation, clock.instant().plus(7, ChronoUnit.MINUTES)));
     }
 
     @Transactional
@@ -159,7 +177,7 @@ public class CallSessionService {
                 callSession.getEndedAt());
     }
 
-    private CallSession createCallSession(Reservation reservation) {
+    private CallSession createCallSession(Reservation reservation, Instant expiresAt) {
         DialoguePolicy dialoguePolicy = dialoguePolicyService.build(
                 reservation.getPersona(),
                 reservation.getScenario(),
@@ -173,7 +191,7 @@ public class CallSessionService {
                         callSession.getId(),
                         reservation.getUser().getId(),
                         dialoguePolicy,
-                        reservation.getScheduledAtUtc().plus(7, ChronoUnit.MINUTES)));
+                        expiresAt));
         callSession.markVoiceSession(voiceSession.voiceSessionId());
         return callSessionRepository.save(callSession);
     }

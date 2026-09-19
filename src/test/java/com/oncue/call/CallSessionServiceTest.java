@@ -218,6 +218,36 @@ class CallSessionServiceTest {
     }
 
     @Test
+    void preparesOwnedReservationForAnImmediateTestCall() {
+        Reservation reservation = reservation();
+        DialoguePolicy policy = policy();
+        when(reservationRepository.findByIdAndUser_Id(100L, 7L)).thenReturn(Optional.of(reservation));
+        when(callSessionRepository.findByReservationId(100L)).thenReturn(Optional.empty());
+        when(callSessionRepository.save(any(CallSession.class)))
+                .thenAnswer(invocation -> {
+                    CallSession callSession = invocation.getArgument(0);
+                    return callSession.getId() == null
+                            ? new CallSession(321L, callSession.getReservation())
+                            : callSession;
+                });
+        when(dialoguePolicyService.build(
+                reservation.getPersona(), reservation.getScenario(),
+                reservation.getScenarioContext(), reservation.getCallGoal(),
+                java.util.Locale.KOREAN)).thenReturn(policy);
+        when(voiceServerClient.createSession(any(CreateVoiceSessionRequest.class)))
+                .thenReturn(new VoiceSessionResponse(321L, "voice-100", NOW));
+
+        CallSessionResponse result = service().prepareForTest(7L, 100L);
+
+        assertThat(result.callSessionId()).isEqualTo(321L);
+        assertThat(result.callStatus()).isEqualTo(CallStatus.PREPARING);
+        ArgumentCaptor<CreateVoiceSessionRequest> requestCaptor =
+                ArgumentCaptor.forClass(CreateVoiceSessionRequest.class);
+        verify(voiceServerClient).createSession(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().expiresAt()).isEqualTo(NOW.plusSeconds(7 * 60L));
+    }
+
+    @Test
     void ringsDueCallAndMarksItFailedWhenPushDeliveryFails() {
         CallSession session = new CallSession(100L, reservation());
         session.markVoiceSession("voice-100");

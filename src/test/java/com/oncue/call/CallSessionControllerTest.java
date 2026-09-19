@@ -15,9 +15,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.TestPropertySource;
 
-@WebMvcTest(CallSessionController.class)
+@WebMvcTest({CallSessionController.class, LocalTestCallController.class})
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "oncue.features.local-test-call-enabled=true")
 class CallSessionControllerTest {
 
     @Autowired
@@ -45,5 +47,23 @@ class CallSessionControllerTest {
                 .andExpect(jsonPath("$.callOutcome").value("FAILED"))
                 .andExpect(jsonPath("$.createdAt").value("2026-09-17T12:00:00Z"))
                 .andExpect(jsonPath("$.endedAt").value("2026-09-17T12:00:30Z"));
+    }
+
+    @Test
+    void preparesReservationForAnImmediateTestCall() throws Exception {
+        when(callSessionService.prepareForTest(eq(7L), eq(100L))).thenReturn(
+                new CallSessionResponse(
+                        42L,
+                        CallStatus.PREPARING,
+                        null,
+                        Instant.parse("2026-09-17T12:00:00Z"),
+                        null));
+
+        mockMvc.perform(post("/api/v1/reservations/100/test-call")
+                        .with(user("7"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.callSessionId").value(42))
+                .andExpect(jsonPath("$.callStatus").value("PREPARING"));
     }
 }

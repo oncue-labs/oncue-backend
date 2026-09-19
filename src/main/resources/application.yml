@@ -38,6 +38,8 @@ management:
       enabled: true
 
 oncue:
+  features:
+    local-test-call-enabled: ${ONCUE_LOCAL_TEST_CALL_ENABLED:false}
   auth:
     signing-secret: ${JWT_SIGNING_SECRET}
     access-token-ttl: ${ACCESS_TOKEN_TTL:PT1H}
