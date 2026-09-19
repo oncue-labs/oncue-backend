@@ -5,6 +5,8 @@ import com.oncue.conversation.service.DialoguePolicyService;
 import com.oncue.reservation.model.Reservation;
 import com.oncue.reservation.exception.ReservationException;
 import com.oncue.reservation.repository.ReservationRepository;
+import com.oncue.push.IncomingCallPushPayload;
+import com.oncue.push.PushNotificationService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ public class CallSessionService {
     private final CallSessionRepository callSessionRepository;
     private final DialoguePolicyService dialoguePolicyService;
     private final VoiceServerClient voiceServerClient;
+    private final PushNotificationService pushNotificationService;
     private final Clock clock;
 
     @Autowired
@@ -31,9 +34,11 @@ public class CallSessionService {
             ReservationRepository reservationRepository,
             CallSessionRepository callSessionRepository,
             DialoguePolicyService dialoguePolicyService,
-            ObjectProvider<VoiceServerClient> voiceServerClientProvider) {
+            ObjectProvider<VoiceServerClient> voiceServerClientProvider,
+            ObjectProvider<PushNotificationService> pushNotificationServiceProvider) {
         this(reservationRepository, callSessionRepository, dialoguePolicyService,
-                voiceServerClientProvider.getIfAvailable(), Clock.systemUTC());
+                voiceServerClientProvider.getIfAvailable(),
+                pushNotificationServiceProvider.getIfAvailable(), Clock.systemUTC());
     }
 
     public CallSessionService(
@@ -42,10 +47,22 @@ public class CallSessionService {
             DialoguePolicyService dialoguePolicyService,
             VoiceServerClient voiceServerClient,
             Clock clock) {
+        this(reservationRepository, callSessionRepository, dialoguePolicyService,
+                voiceServerClient, null, clock);
+    }
+
+    public CallSessionService(
+            ReservationRepository reservationRepository,
+            CallSessionRepository callSessionRepository,
+            DialoguePolicyService dialoguePolicyService,
+            VoiceServerClient voiceServerClient,
+            PushNotificationService pushNotificationService,
+            Clock clock) {
         this.reservationRepository = reservationRepository;
         this.callSessionRepository = callSessionRepository;
         this.dialoguePolicyService = dialoguePolicyService;
         this.voiceServerClient = voiceServerClient;
+        this.pushNotificationService = pushNotificationService;
         this.clock = clock;
     }
 
@@ -87,6 +104,25 @@ public class CallSessionService {
                     : CallOutcome.FAILED;
             callSession.complete(outcome, callSession.getStartedAt(), now);
             callSessionRepository.save(callSession);
+        });
+    }
+
+    @Transactional
+    public void ringDueCallSessions(Instant now) {
+        callSessionRepository.findDueForRinging(now).forEach(callSession -> {
+            callSession.advanceTo(CallStatus.RINGING);
+            callSessionRepository.save(callSession);
+
+            boolean delivered = pushNotificationService != null
+                    && pushNotificationService.sendIncomingCall(
+                            callSession.getReservation().getUser().getId(),
+                            new IncomingCallPushPayload(
+                                    callSession.getId(),
+                                    callSession.getReservation().getPersona().getName()));
+            if (!delivered) {
+                callSession.complete(CallOutcome.FAILED, callSession.getStartedAt(), now);
+                callSessionRepository.save(callSession);
+            }
         });
     }
 

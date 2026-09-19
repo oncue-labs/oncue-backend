@@ -47,6 +47,7 @@ public class ReservationPreparationScheduler {
         reservationRepository.findDueForCallPreparation(
                         ReservationStatus.SCHEDULED, now, dueUntil)
                 .forEach(this::prepare);
+        callSessionService.ringDueCallSessions(now);
     }
 
     private void prepare(Reservation reservation) {

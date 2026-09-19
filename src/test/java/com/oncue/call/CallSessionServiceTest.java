@@ -8,6 +8,8 @@ import com.oncue.conversation.service.DialoguePolicyService;
 import com.oncue.reservation.model.Reservation;
 import com.oncue.reservation.exception.ReservationException;
 import com.oncue.reservation.repository.ReservationRepository;
+import com.oncue.push.IncomingCallPushPayload;
+import com.oncue.push.PushNotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -46,6 +48,9 @@ class CallSessionServiceTest {
 
     @Mock
     private VoiceServerClient voiceServerClient;
+
+    @Mock
+    private PushNotificationService pushNotificationService;
 
     @Test
     void preparesDueReservationOnceAndStoresVoiceSessionId() {
@@ -212,12 +217,48 @@ class CallSessionServiceTest {
         verify(voiceServerClient, never()).createSession(any(CreateVoiceSessionRequest.class));
     }
 
+    @Test
+    void ringsDueCallAndMarksItFailedWhenPushDeliveryFails() {
+        CallSession session = new CallSession(100L, reservation());
+        session.markVoiceSession("voice-100");
+        when(callSessionRepository.findDueForRinging(NOW)).thenReturn(List.of(session));
+        when(pushNotificationService.sendIncomingCall(
+                7L, new IncomingCallPushPayload(100L, "Santa"))).thenReturn(false);
+        when(callSessionRepository.save(any(CallSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service().ringDueCallSessions(NOW);
+
+        assertThat(session.getCallStatus()).isEqualTo(CallStatus.RINGING);
+        assertThat(session.getCallOutcome()).isEqualTo(CallOutcome.FAILED);
+        assertThat(session.getEndedAt()).isEqualTo(NOW);
+        verify(callSessionRepository, org.mockito.Mockito.times(2)).save(session);
+    }
+
+    @Test
+    void ringsDueCallWhenPushDeliverySucceeds() {
+        CallSession session = new CallSession(100L, reservation());
+        session.markVoiceSession("voice-100");
+        when(callSessionRepository.findDueForRinging(NOW)).thenReturn(List.of(session));
+        when(pushNotificationService.sendIncomingCall(
+                7L, new IncomingCallPushPayload(100L, "Santa"))).thenReturn(true);
+        when(callSessionRepository.save(any(CallSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service().ringDueCallSessions(NOW);
+
+        assertThat(session.getCallStatus()).isEqualTo(CallStatus.RINGING);
+        assertThat(session.getCallOutcome()).isNull();
+        verify(callSessionRepository).save(session);
+    }
+
     private CallSessionService service() {
         return new CallSessionService(
                 reservationRepository,
                 callSessionRepository,
                 dialoguePolicyService,
                 voiceServerClient,
+                pushNotificationService,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 

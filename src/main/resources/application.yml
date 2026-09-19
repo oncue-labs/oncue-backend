@@ -49,3 +49,10 @@ oncue:
     # 통화 연결 토큰 전용 RSA PKCS#8 개인키. 직접 값이 파일보다 우선하며 둘 중 하나만 설정한다.
     jwt-private-key: ${VOICE_JWT_PRIVATE_KEY:}
     jwt-private-key-file: ${VOICE_JWT_PRIVATE_KEY_FILE:}
+  push:
+    apns:
+      key-id: ${APNS_KEY_ID:}
+      team-id: ${APNS_TEAM_ID:}
+      bundle-id: ${APNS_BUNDLE_ID:com.oncue.oncueMobile}
+      private-key: ${APNS_PRIVATE_KEY:}
+      private-key-file: ${APNS_PRIVATE_KEY_FILE:}

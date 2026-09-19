@@ -21,4 +21,14 @@ public interface CallSessionRepository extends JpaRepository<CallSession, Long> 
             order by callSession.reservation.scheduledAtUtc asc
             """)
     List<CallSession> findUnfinishedBefore(@Param("scheduledBefore") Instant scheduledBefore);
+
+    @Query("""
+            select callSession
+            from CallSession callSession
+            where callSession.callStatus = com.oncue.call.CallStatus.PREPARING
+              and callSession.callOutcome is null
+              and callSession.reservation.scheduledAtUtc <= :scheduledAtOrBefore
+            order by callSession.reservation.scheduledAtUtc asc
+            """)
+    List<CallSession> findDueForRinging(@Param("scheduledAtOrBefore") Instant scheduledAtOrBefore);
 }
