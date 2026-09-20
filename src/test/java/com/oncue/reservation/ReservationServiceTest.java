@@ -2,6 +2,10 @@ package com.oncue.reservation;
 
 import com.oncue.auth.model.User;
 import com.oncue.auth.repository.UserRepository;
+import com.oncue.call.CallOutcome;
+import com.oncue.call.CallSession;
+import com.oncue.call.CallSessionRepository;
+import com.oncue.call.CallStatus;
 import com.oncue.combination.model.Persona;
 import com.oncue.combination.model.Scenario;
 import com.oncue.combination.repository.PersonaRepository;
@@ -30,6 +34,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 import static org.mockito.ArgumentMatchers.any;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -51,6 +56,9 @@ class ReservationServiceTest {
     @Mock
     private ReservationRepository reservationRepository;
 
+    @Mock
+    private CallSessionRepository callSessionRepository;
+
     private ReservationService reservationService;
 
     @BeforeEach
@@ -61,6 +69,7 @@ class ReservationServiceTest {
                 scenarioRepository,
                 reservationRepository,
                 new RuleBasedSafetyClassifier(request -> com.oncue.reservation.safety.SafetyDecision.SAFE),
+                callSessionRepository,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -257,6 +266,21 @@ class ReservationServiceTest {
                 .containsExactly(
                         Instant.parse("2026-09-08T12:00:00Z"),
                         Instant.parse("2026-09-08T13:00:00Z"));
+    }
+
+    @Test
+    void includesCallSessionStatusAndOutcomeInReservationResponse() {
+        Reservation reservation = scheduledReservation(Instant.parse("2026-09-08T12:00:00Z"));
+        CallSession callSession = mock(CallSession.class);
+        when(reservationRepository.findByIdAndUser_Id(100L, USER_ID)).thenReturn(Optional.of(reservation));
+        when(callSessionRepository.findByReservationId(reservation.getId())).thenReturn(Optional.of(callSession));
+        when(callSession.getCallStatus()).thenReturn(CallStatus.IN_CALL);
+        when(callSession.getCallOutcome()).thenReturn(CallOutcome.SUCCEEDED);
+
+        ReservationResponse response = reservationService.get(USER_ID, 100L);
+
+        assertThat(response.callStatus()).isEqualTo("IN_CALL");
+        assertThat(response.callOutcome()).isEqualTo("SUCCEEDED");
     }
 
     @Test

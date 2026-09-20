@@ -2,6 +2,8 @@ package com.oncue.reservation.service;
 
 import com.oncue.auth.model.User;
 import com.oncue.auth.repository.UserRepository;
+import com.oncue.call.CallSession;
+import com.oncue.call.CallSessionRepository;
 import com.oncue.combination.model.Persona;
 import com.oncue.combination.model.Scenario;
 import com.oncue.combination.repository.PersonaRepository;
@@ -22,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.DateTimeException;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,7 @@ public class ReservationService {
     private final ScenarioRepository scenarioRepository;
     private final ReservationRepository reservationRepository;
     private final RuleBasedSafetyClassifier safetyClassifier;
+    private final CallSessionRepository callSessionRepository;
     private final Clock clock;
 
     @Autowired
@@ -44,9 +48,10 @@ public class ReservationService {
             PersonaRepository personaRepository,
             ScenarioRepository scenarioRepository,
             ReservationRepository reservationRepository,
-            RuleBasedSafetyClassifier safetyClassifier) {
+            RuleBasedSafetyClassifier safetyClassifier,
+            CallSessionRepository callSessionRepository) {
         this(userRepository, personaRepository, scenarioRepository, reservationRepository,
-                safetyClassifier, Clock.systemUTC());
+                safetyClassifier, callSessionRepository, Clock.systemUTC());
     }
 
     public ReservationService(
@@ -55,12 +60,14 @@ public class ReservationService {
             ScenarioRepository scenarioRepository,
             ReservationRepository reservationRepository,
             RuleBasedSafetyClassifier safetyClassifier,
+            CallSessionRepository callSessionRepository,
             Clock clock) {
         this.userRepository = userRepository;
         this.personaRepository = personaRepository;
         this.scenarioRepository = scenarioRepository;
         this.reservationRepository = reservationRepository;
         this.safetyClassifier = safetyClassifier;
+        this.callSessionRepository = callSessionRepository;
         this.clock = clock;
     }
 
@@ -218,6 +225,8 @@ public class ReservationService {
     private ReservationResponse toResponse(Reservation reservation) {
         ZoneId zoneId = ZoneId.of(reservation.getTimeZone());
         LocalDateTime scheduledAtLocal = LocalDateTime.ofInstant(reservation.getScheduledAtUtc(), zoneId);
+        Optional<CallSession> callSession = callSessionRepository
+                .findByReservationId(reservation.getId());
         return new ReservationResponse(
                 reservation.getId(),
                 reservation.getReservationStatus().name(),
@@ -230,8 +239,12 @@ public class ReservationService {
                 reservation.getScheduledAtUtc(),
                 reservation.getEditableUntil(),
                 reservation.getCreatedAt(),
-                null,
-                null);
+                callSession.map(CallSession::getCallStatus)
+                        .map(Enum::name)
+                        .orElse(null),
+                callSession.map(CallSession::getCallOutcome)
+                        .map(Enum::name)
+                        .orElse(null));
     }
 
     private static String valueOrDefault(String value, String defaultValue) {
