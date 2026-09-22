@@ -248,6 +248,36 @@ class CallSessionServiceTest {
     }
 
     @Test
+    void ringsOwnedReservationForAnImmediateIncomingCall() {
+        Reservation reservation = reservation();
+        DialoguePolicy policy = policy();
+        when(reservationRepository.findByIdAndUser_Id(100L, 7L)).thenReturn(Optional.of(reservation));
+        when(callSessionRepository.findByReservationId(100L)).thenReturn(Optional.empty());
+        when(callSessionRepository.save(any(CallSession.class)))
+                .thenAnswer(invocation -> {
+                    CallSession callSession = invocation.getArgument(0);
+                    return callSession.getId() == null
+                            ? new CallSession(321L, callSession.getReservation())
+                            : callSession;
+                });
+        when(dialoguePolicyService.build(
+                reservation.getPersona(), reservation.getScenario(),
+                reservation.getScenarioContext(), reservation.getCallGoal(),
+                java.util.Locale.KOREAN)).thenReturn(policy);
+        when(voiceServerClient.createSession(any(CreateVoiceSessionRequest.class)))
+                .thenReturn(new VoiceSessionResponse(321L, "voice-100", NOW));
+        when(pushNotificationService.sendIncomingCall(
+                7L, new IncomingCallPushPayload(321L, "Santa"))).thenReturn(true);
+
+        CallSessionResponse result = service().ringForTest(7L, 100L);
+
+        assertThat(result.callSessionId()).isEqualTo(321L);
+        assertThat(result.callStatus()).isEqualTo(CallStatus.RINGING);
+        verify(pushNotificationService).sendIncomingCall(
+                7L, new IncomingCallPushPayload(321L, "Santa"));
+    }
+
+    @Test
     void reusesEndedCallSessionForAnotherImmediateTestCall() {
         Reservation reservation = reservation();
         DialoguePolicy policy = policy();

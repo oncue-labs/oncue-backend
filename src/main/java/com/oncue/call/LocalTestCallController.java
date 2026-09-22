@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Local-development endpoint that bypasses reservation timing and APNs. */
+/** Development-only endpoints that bypass reservation timing. */
 @RestController
 @RequestMapping("/api/v1/reservations")
 public class LocalTestCallController {
@@ -34,5 +34,16 @@ public class LocalTestCallController {
         }
         Long userId = Long.valueOf(authentication.getName());
         return ResponseEntity.ok(callSessionService.prepareForTest(userId, reservationId));
+    }
+
+    @PostMapping("/{reservationId}/test-incoming-call")
+    public ResponseEntity<CallSessionResponse> ring(
+            Authentication authentication,
+            @PathVariable Long reservationId) {
+        if (!enabled) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        Long userId = Long.valueOf(authentication.getName());
+        return ResponseEntity.ok(callSessionService.ringForTest(userId, reservationId));
     }
 }

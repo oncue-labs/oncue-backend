@@ -66,4 +66,22 @@ class CallSessionControllerTest {
                 .andExpect(jsonPath("$.callSessionId").value(42))
                 .andExpect(jsonPath("$.callStatus").value("PREPARING"));
     }
+
+    @Test
+    void sendsAnIncomingCallForAnImmediateTestCall() throws Exception {
+        when(callSessionService.ringForTest(eq(7L), eq(100L))).thenReturn(
+                new CallSessionResponse(
+                        42L,
+                        CallStatus.RINGING,
+                        null,
+                        Instant.parse("2026-09-17T12:00:00Z"),
+                        null));
+
+        mockMvc.perform(post("/api/v1/reservations/100/test-incoming-call")
+                        .with(user("7"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.callSessionId").value(42))
+                .andExpect(jsonPath("$.callStatus").value("RINGING"));
+    }
 }

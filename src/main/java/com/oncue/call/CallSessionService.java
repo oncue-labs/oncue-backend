@@ -77,6 +77,17 @@ public class CallSessionService {
 
     @Transactional
     public CallSessionResponse prepareForTest(Long userId, Long reservationId) {
+        return toResponse(prepareForTestCallSession(userId, reservationId));
+    }
+
+    @Transactional
+    public CallSessionResponse ringForTest(Long userId, Long reservationId) {
+        CallSession callSession = prepareForTestCallSession(userId, reservationId);
+        ringCallSession(callSession, clock.instant());
+        return toResponse(callSession);
+    }
+
+    private CallSession prepareForTestCallSession(Long userId, Long reservationId) {
         Reservation reservation = reservationRepository.findByIdAndUser_Id(reservationId, userId)
                 .orElseThrow(() -> new ReservationException(HttpStatus.NOT_FOUND, "Reservation not found"));
         java.util.Optional<CallSession> existing = callSessionRepository.findByReservationId(reservationId);
@@ -87,14 +98,13 @@ public class CallSessionService {
                     requireVoiceServerClient().terminateSession(callSession.getVoiceSessionId());
                 }
                 callSession.resetForTest();
-                return toResponse(attachVoiceSession(
-                        callSession, reservation, clock.instant().plus(7, ChronoUnit.MINUTES)));
+                return attachVoiceSession(
+                        callSession, reservation, clock.instant().plus(7, ChronoUnit.MINUTES));
             }
-            return toResponse(callSession);
+            return callSession;
         }
 
-        return toResponse(createCallSession(
-                reservation, clock.instant().plus(7, ChronoUnit.MINUTES)));
+        return createCallSession(reservation, clock.instant().plus(7, ChronoUnit.MINUTES));
     }
 
     @Transactional
@@ -132,21 +142,8 @@ public class CallSessionService {
 
     @Transactional
     public void ringDueCallSessions(Instant now) {
-        callSessionRepository.findDueForRinging(now).forEach(callSession -> {
-            callSession.advanceTo(CallStatus.RINGING);
-            callSessionRepository.save(callSession);
-
-            boolean delivered = pushNotificationService != null
-                    && pushNotificationService.sendIncomingCall(
-                            callSession.getReservation().getUser().getId(),
-                            new IncomingCallPushPayload(
-                                    callSession.getId(),
-                                    callSession.getReservation().getPersona().getName()));
-            if (!delivered) {
-                callSession.complete(CallOutcome.FAILED, callSession.getStartedAt(), now);
-                callSessionRepository.save(callSession);
-            }
-        });
+        callSessionRepository.findDueForRinging(now)
+                .forEach(callSession -> ringCallSession(callSession, now));
     }
 
     @Transactional
@@ -180,6 +177,25 @@ public class CallSessionService {
                 callSession.getCallOutcome(),
                 callSession.getCreatedAt(),
                 callSession.getEndedAt());
+    }
+
+    private void ringCallSession(CallSession callSession, Instant now) {
+        if (callSession.getCallStatus() != CallStatus.PREPARING) {
+            return;
+        }
+        callSession.advanceTo(CallStatus.RINGING);
+        callSessionRepository.save(callSession);
+
+        boolean delivered = pushNotificationService != null
+                && pushNotificationService.sendIncomingCall(
+                        callSession.getReservation().getUser().getId(),
+                        new IncomingCallPushPayload(
+                                callSession.getId(),
+                                callSession.getReservation().getPersona().getName()));
+        if (!delivered) {
+            callSession.complete(CallOutcome.FAILED, callSession.getStartedAt(), now);
+            callSessionRepository.save(callSession);
+        }
     }
 
     private CallSession createCallSession(Reservation reservation, Instant expiresAt) {
