@@ -83,6 +83,10 @@ public class CallSessionService {
     @Transactional
     public CallSessionResponse ringForTest(Long userId, Long reservationId) {
         CallSession callSession = prepareForTestCallSession(userId, reservationId);
+        if (callSession.getCallStatus() == CallStatus.RINGING) {
+            resendIncomingCallPush(callSession);
+            return toResponse(callSession);
+        }
         ringCallSession(callSession, clock.instant());
         return toResponse(callSession);
     }
@@ -93,7 +97,7 @@ public class CallSessionService {
         java.util.Optional<CallSession> existing = callSessionRepository.findByReservationId(reservationId);
         if (existing.isPresent()) {
             CallSession callSession = existing.get();
-            if (callSession.isEnded()) {
+            if (callSession.isEnded() || callSession.getCallStatus() == CallStatus.RINGING) {
                 if (callSession.getVoiceSessionId() != null) {
                     requireVoiceServerClient().terminateSession(callSession.getVoiceSessionId());
                 }
@@ -186,16 +190,20 @@ public class CallSessionService {
         callSession.advanceTo(CallStatus.RINGING);
         callSessionRepository.save(callSession);
 
-        boolean delivered = pushNotificationService != null
+        boolean delivered = resendIncomingCallPush(callSession);
+        if (!delivered) {
+            callSession.complete(CallOutcome.FAILED, callSession.getStartedAt(), now);
+            callSessionRepository.save(callSession);
+        }
+    }
+
+    private boolean resendIncomingCallPush(CallSession callSession) {
+        return pushNotificationService != null
                 && pushNotificationService.sendIncomingCall(
                         callSession.getReservation().getUser().getId(),
                         new IncomingCallPushPayload(
                                 callSession.getId(),
                                 callSession.getReservation().getPersona().getName()));
-        if (!delivered) {
-            callSession.complete(CallOutcome.FAILED, callSession.getStartedAt(), now);
-            callSessionRepository.save(callSession);
-        }
     }
 
     private CallSession createCallSession(Reservation reservation, Instant expiresAt) {

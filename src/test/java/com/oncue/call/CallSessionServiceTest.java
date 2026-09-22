@@ -278,6 +278,35 @@ class CallSessionServiceTest {
     }
 
     @Test
+    void replacesRingingVoiceSessionForAnotherImmediateTestCall() {
+        Reservation reservation = reservation();
+        DialoguePolicy policy = policy();
+        CallSession existing = new CallSession(321L, reservation);
+        existing.markVoiceSession("voice-old");
+        existing.advanceTo(CallStatus.RINGING);
+        when(reservationRepository.findByIdAndUser_Id(100L, 7L)).thenReturn(Optional.of(reservation));
+        when(callSessionRepository.findByReservationId(100L)).thenReturn(Optional.of(existing));
+        when(callSessionRepository.save(any(CallSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dialoguePolicyService.build(
+                reservation.getPersona(), reservation.getScenario(),
+                reservation.getScenarioContext(), reservation.getCallGoal(),
+                java.util.Locale.KOREAN)).thenReturn(policy);
+        when(voiceServerClient.createSession(any(CreateVoiceSessionRequest.class)))
+                .thenReturn(new VoiceSessionResponse(321L, "voice-new", NOW));
+        when(pushNotificationService.sendIncomingCall(
+                7L, new IncomingCallPushPayload(321L, "Santa"))).thenReturn(true);
+
+        CallSessionResponse result = service().ringForTest(7L, 100L);
+
+        assertThat(result.callStatus()).isEqualTo(CallStatus.RINGING);
+        assertThat(existing.getVoiceSessionId()).isEqualTo("voice-new");
+        verify(voiceServerClient).terminateSession("voice-old");
+        verify(voiceServerClient).createSession(any(CreateVoiceSessionRequest.class));
+        verify(pushNotificationService).sendIncomingCall(
+                7L, new IncomingCallPushPayload(321L, "Santa"));
+    }
+
+    @Test
     void reusesEndedCallSessionForAnotherImmediateTestCall() {
         Reservation reservation = reservation();
         DialoguePolicy policy = policy();
