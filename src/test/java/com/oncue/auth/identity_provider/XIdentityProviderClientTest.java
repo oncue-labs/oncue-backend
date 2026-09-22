@@ -2,6 +2,7 @@ package com.oncue.auth.identity_provider;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.oncue.auth.controller.request.LoginRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -29,6 +31,7 @@ class XIdentityProviderClientTest {
 
         server.expect(requestTo("http://provider.test/token"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Basic eC1jbGllbnQ6eC1zZWNyZXQ="))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("code=authorization-code")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("code_verifier=code-verifier")))
                 .andRespond(withSuccess(

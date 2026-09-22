@@ -59,15 +59,14 @@ public class XIdentityProviderClient implements IdentityProviderClient {
     public ExternalIdentity resolve(LoginRequest request) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "authorization_code");
-        form.add("client_id", clientId);
         form.add("code", request.authorizationCode());
         form.add("code_verifier", request.codeVerifier());
-        addIfPresent(form, "client_secret", clientSecret);
         addIfPresent(form, "redirect_uri", redirectUri);
 
         Map<String, Object> tokenResponse = restClient.post()
                 .uri(tokenUrl)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .headers(headers -> headers.setBasicAuth(clientId, clientSecret))
                 .body(form)
                 .retrieve()
                 .body(RESPONSE_TYPE);
