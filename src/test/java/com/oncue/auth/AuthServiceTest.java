@@ -10,6 +10,7 @@ import com.oncue.auth.identity_provider.ExternalIdentity;
 import com.oncue.auth.identity_provider.IdentityProviderClient;
 import com.oncue.auth.model.User;
 import com.oncue.auth.model.UserLoginAccount;
+import com.oncue.auth.service.RefreshTokenService;
 import com.oncue.auth.repository.UserLoginAccountRepository;
 import com.oncue.auth.repository.UserRepository;
 import com.oncue.auth.controller.request.LoginRequest;
@@ -40,11 +41,15 @@ class AuthServiceTest {
     @Mock
     private AccessTokenService accessTokenService;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     @Test
     void loginWithKakaoCreatesUserAndReturnsContractFields() {
         var request = new LoginRequest("kakao", "kakao-provider-access-token", null, null);
         var user = new User(42L);
         var expiresAt = Instant.parse("2026-09-12T14:00:00Z");
+        var refreshExpiresAt = Instant.parse("2026-10-12T14:00:00Z");
 
         when(identityProviderClient.provider()).thenReturn("kakao");
         when(identityProviderClient.resolve(request))
@@ -53,6 +58,8 @@ class AuthServiceTest {
                 .thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(accessTokenService.issue(user)).thenReturn(new AccessToken("access-token", expiresAt));
+        when(refreshTokenService.issue(user))
+                .thenReturn(new com.oncue.auth.service.IssuedRefreshToken("refresh-token", refreshExpiresAt));
 
         var authService = newAuthService();
         LoginResponse response = authService.login(request);
@@ -60,6 +67,8 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.expiresAt()).isEqualTo(expiresAt);
         assertThat(response.createdAt()).isNotNull();
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
+        assertThat(response.refreshTokenExpiresAt()).isEqualTo(refreshExpiresAt);
         verify(userLoginAccountRepository).save(any(UserLoginAccount.class));
     }
 
@@ -69,6 +78,7 @@ class AuthServiceTest {
         var user = new User(7L);
         var account = new UserLoginAccount(user, "x", "x-user-1");
         var expiresAt = Instant.parse("2026-09-12T14:00:00Z");
+        var refreshExpiresAt = Instant.parse("2026-10-12T14:00:00Z");
 
         when(identityProviderClient.provider()).thenReturn("x");
         when(identityProviderClient.resolve(request))
@@ -76,6 +86,8 @@ class AuthServiceTest {
         when(userLoginAccountRepository.findByProviderAndProviderUserId("x", "x-user-1"))
                 .thenReturn(Optional.of(account));
         when(accessTokenService.issue(user)).thenReturn(new AccessToken("access-token", expiresAt));
+        when(refreshTokenService.issue(user))
+                .thenReturn(new com.oncue.auth.service.IssuedRefreshToken("refresh-token", refreshExpiresAt));
 
         var authService = newAuthService();
         LoginResponse response = authService.login(request);
@@ -99,6 +111,7 @@ class AuthServiceTest {
                 List.of(identityProviderClient),
                 userRepository,
                 userLoginAccountRepository,
-                accessTokenService);
+                accessTokenService,
+                refreshTokenService);
     }
 }

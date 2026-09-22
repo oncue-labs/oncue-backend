@@ -54,7 +54,9 @@ class FlywaySchemaIntegrationTest {
                 "personas",
                 "scenarios",
                 "reservations",
-                "call_sessions");
+                "call_sessions",
+                "push_devices",
+                "refresh_tokens");
 
         assertThat(columnNames("scenarios")).doesNotContain("persona_id");
         assertThat(columnNames("call_sessions")).doesNotContain("call_end_reason");
@@ -63,7 +65,9 @@ class FlywaySchemaIntegrationTest {
                 "reservations.user_id->users.id",
                 "reservations.persona_id->personas.id",
                 "reservations.scenario_id->scenarios.id",
-                "call_sessions.reservation_id->reservations.id");
+                "call_sessions.reservation_id->reservations.id",
+                "push_devices.user_id->users.id",
+                "refresh_tokens.user_id->users.id");
 
         assertColumn("users", "id", "bigint unsigned", true);
         assertColumn("user_login_accounts", "id", "bigint unsigned", true);
@@ -71,6 +75,8 @@ class FlywaySchemaIntegrationTest {
         assertColumn("scenarios", "id", "bigint unsigned", true);
         assertColumn("reservations", "id", "bigint unsigned", true);
         assertColumn("call_sessions", "id", "bigint unsigned", true);
+        assertColumn("push_devices", "id", "bigint unsigned", true);
+        assertColumn("refresh_tokens", "id", "bigint unsigned", true);
 
         assertColumn("personas", "dialogue_rules", "json", false);
         assertColumn("scenarios", "dialogue_rules", "json", false);
@@ -79,6 +85,8 @@ class FlywaySchemaIntegrationTest {
         assertColumn("reservations", "scheduled_at_utc", "datetime(6)", false);
         assertColumn("call_sessions", "created_at", "datetime(6)", false);
         assertColumn("call_sessions", "ended_at", "datetime(6)", false);
+        assertColumn("refresh_tokens", "token_hash", "varchar(64)", false);
+        assertColumn("refresh_tokens", "expires_at", "datetime(6)", false);
     }
 
     @Test

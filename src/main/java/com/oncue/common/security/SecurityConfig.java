@@ -25,6 +25,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/v1/auth/login").permitAll()
+                        .requestMatchers("/api/v1/auth/refresh").permitAll()
+                        .requestMatchers("/api/v1/auth/logout").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         // callback controller가 service token을 자체 검증하므로 access token 필터 대상에서 제외한다.
                         .requestMatchers("/internal/v1/call-sessions/*/result").permitAll()

@@ -43,7 +43,10 @@ oncue:
   auth:
     signing-secret: ${JWT_SIGNING_SECRET}
     access-token-ttl: ${ACCESS_TOKEN_TTL:PT1H}
+    refresh-token-ttl: ${REFRESH_TOKEN_TTL:720h}
     x:
+      client-id: ${ONCUE_AUTH_X_CLIENT_ID:}
+      client-secret: ${ONCUE_AUTH_X_CLIENT_SECRET:}
       redirect-uri: ${X_REDIRECT_URI:com.oncue.oncuemobile://oauth/x/callback}
   voice:
     base-url: ${VOICE_SERVER_URL:http://localhost:8000}

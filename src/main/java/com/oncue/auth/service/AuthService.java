@@ -1,7 +1,9 @@
 package com.oncue.auth.service;
 
 import com.oncue.auth.controller.request.LoginRequest;
+import com.oncue.auth.controller.request.RefreshTokenRequest;
 import com.oncue.auth.controller.response.LoginResponse;
+import com.oncue.auth.exception.AuthException;
 import com.oncue.auth.identity_provider.ExternalIdentity;
 import com.oncue.auth.identity_provider.IdentityProviderClient;
 import com.oncue.auth.model.User;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,12 +28,14 @@ public class AuthService {
     private final UserRepository userRepository;
     private final UserLoginAccountRepository userLoginAccountRepository;
     private final AccessTokenService accessTokenService;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthService(
             List<IdentityProviderClient> identityProviderClients,
             UserRepository userRepository,
             UserLoginAccountRepository userLoginAccountRepository,
-            AccessTokenService accessTokenService) {
+            AccessTokenService accessTokenService,
+            RefreshTokenService refreshTokenService) {
         this.identityProviderClients = identityProviderClients.stream()
                 .collect(Collectors.toUnmodifiableMap(
                         IdentityProviderClient::provider,
@@ -38,6 +43,7 @@ public class AuthService {
         this.userRepository = userRepository;
         this.userLoginAccountRepository = userLoginAccountRepository;
         this.accessTokenService = accessTokenService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Transactional
@@ -65,7 +71,33 @@ public class AuthService {
         }
 
         AccessToken accessToken = accessTokenService.issue(user);
-        return new LoginResponse(accessToken.value(), accessToken.expiresAt(), Instant.now());
+        return createResponse(accessToken, refreshTokenService.issue(user));
+    }
+
+    @Transactional
+    public LoginResponse refresh(RefreshTokenRequest request) {
+        final User user;
+        try {
+            user = refreshTokenService.consume(request.refreshToken());
+        } catch (IllegalArgumentException exception) {
+            throw new AuthException(HttpStatus.UNAUTHORIZED, "Refresh token is invalid or expired");
+        }
+        return createResponse(accessTokenService.issue(user), refreshTokenService.issue(user));
+    }
+
+    public void logout(RefreshTokenRequest request) {
+        refreshTokenService.revoke(request.refreshToken());
+    }
+
+    private static LoginResponse createResponse(
+            AccessToken accessToken,
+            IssuedRefreshToken refreshToken) {
+        return new LoginResponse(
+                accessToken.value(),
+                accessToken.expiresAt(),
+                Instant.now(),
+                refreshToken.value(),
+                refreshToken.expiresAt());
     }
 
     private static void validateProviderCredentials(LoginRequest request) {

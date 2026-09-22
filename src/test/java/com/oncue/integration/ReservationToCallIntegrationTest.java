@@ -17,6 +17,9 @@ import com.oncue.call.CreateVoiceSessionRequest;
 import com.oncue.call.VoiceServerClient;
 import com.oncue.call.VoiceSessionResponse;
 import com.oncue.common.security.AccessTokenService;
+import com.oncue.auth.service.IssuedRefreshToken;
+import com.oncue.auth.service.RefreshTokenService;
+import com.oncue.auth.controller.request.RefreshTokenRequest;
 import com.oncue.reservation.controller.request.CreateReservationRequest;
 import com.oncue.reservation.scheduler.ReservationPreparationScheduler;
 import java.time.Instant;
@@ -73,6 +76,9 @@ class ReservationToCallIntegrationTest {
     private AccessTokenService accessTokenService;
 
     @Autowired
+    private RefreshTokenService refreshTokenService;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -86,6 +92,24 @@ class ReservationToCallIntegrationTest {
 
     @Autowired
     private RecordingVoiceServerClient voiceServerClient;
+
+    @Test
+    void rotatesRefreshTokenAndRejectsItsReuseAcrossTheHttpAndDatabaseBoundary() throws Exception {
+        User user = userRepository.saveAndFlush(User.active());
+        IssuedRefreshToken issuedToken = refreshTokenService.issue(user);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new RefreshTokenRequest(issuedToken.value()))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new RefreshTokenRequest(issuedToken.value()))))
+                .andExpect(status().isUnauthorized());
+    }
 
     @DynamicPropertySource
     static void configureContainers(DynamicPropertyRegistry registry) {

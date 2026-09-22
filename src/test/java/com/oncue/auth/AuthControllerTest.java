@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oncue.auth.controller.AuthController;
 import com.oncue.auth.controller.request.LoginRequest;
+import com.oncue.auth.controller.request.RefreshTokenRequest;
 import com.oncue.auth.controller.response.LoginResponse;
 import com.oncue.auth.service.AuthService;
 import java.time.Instant;
@@ -48,5 +49,27 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.accessToken").value("access-token"))
                 .andExpect(jsonPath("$.expiresAt").value("2026-09-12T14:00:00Z"))
                 .andExpect(jsonPath("$.createdAt").value("2026-09-12T13:00:00Z"));
+    }
+
+    @Test
+    void refreshReturnsTheRotatedTokenPair() throws Exception {
+        var expiresAt = Instant.parse("2026-09-12T14:00:00Z");
+        var createdAt = Instant.parse("2026-09-12T13:00:00Z");
+        var refreshExpiresAt = Instant.parse("2026-10-12T13:00:00Z");
+        when(authService.refresh(any(RefreshTokenRequest.class)))
+                .thenReturn(new LoginResponse(
+                        "new-access-token",
+                        expiresAt,
+                        createdAt,
+                        "new-refresh-token",
+                        refreshExpiresAt));
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefreshTokenRequest("refresh-token"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new-access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("new-refresh-token"))
+                .andExpect(jsonPath("$.refreshTokenExpiresAt").value("2026-10-12T13:00:00Z"));
     }
 }

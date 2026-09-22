@@ -27,4 +27,10 @@ class SecurityConfigTest {
         mockMvc.perform(get("/api/v1/auth/login"))
                 .andExpect(status().isMethodNotAllowed());
     }
+
+    @Test
+    void refreshEndpointIsPublicBeforeRequestValidation() throws Exception {
+        mockMvc.perform(get("/api/v1/auth/refresh"))
+                .andExpect(status().isMethodNotAllowed());
+    }
 }
