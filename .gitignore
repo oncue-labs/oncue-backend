@@ -2,3 +2,7 @@
 build/
 out/
 *.iml
+.env
+.env.*
+!.env.template
+.secrets/
